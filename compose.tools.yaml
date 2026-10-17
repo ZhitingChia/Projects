@@ -1,0 +1,23 @@
+# Optional Linux toolchain for WSL without host Java/Node installations.
+services:
+  backend-tools:
+    image: maven:3.9-eclipse-temurin-21
+    working_dir: /workspace/backend
+    volumes:
+      - .:/workspace
+      - maven-cache:/root/.m2
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    command: mvn -B verify
+  frontend-tools:
+    image: node:24-bookworm
+    working_dir: /workspace/frontend
+    volumes:
+      - .:/workspace
+      - frontend-deps:/workspace/frontend/node_modules
+    command: sh -c "npm ci && npm run build && npm test"
+volumes:
+  maven-cache:
+  frontend-deps:

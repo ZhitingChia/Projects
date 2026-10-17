@@ -1,0 +1,30 @@
+services:
+  providers:
+    image: wiremock/wiremock:3.13.1
+    volumes: ["./e2e/providers:/home/wiremock/mappings:ro"]
+  app:
+    environment:
+      APP_BASE_URL: http://lifetracker.test:8080
+      GOOGLE_BOOKS_URL: http://providers:8080/google
+      OPEN_LIBRARY_URL: http://providers:8080/open
+    depends_on:
+      providers: {condition: service_started}
+    networks:
+      default:
+        aliases: [lifetracker.test]
+  e2e:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    working_dir: /workspace/frontend
+    init: true
+    ipc: host
+    volumes:
+      - .:/workspace
+      - e2e-deps:/workspace/frontend/node_modules
+    environment:
+      BASE_URL: http://lifetracker.test:8080
+      MAILPIT_URL: http://mailpit:8025
+    command: sh -c "npm ci && npx playwright test"
+    depends_on:
+      app: {condition: service_healthy}
+volumes:
+  e2e-deps:

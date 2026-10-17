@@ -1,0 +1,1 @@
+{"request":{"method":"GET","urlPath":"/open/search.json"},"response":{"status":503,"jsonBody":{"error":"Intentional outage fixture"}}}

@@ -1,0 +1,1 @@
+{"request":{"method":"GET","urlPath":"/google/volumes"},"response":{"status":200,"jsonBody":{"items":[{"id":"test-edition","volumeInfo":{"title":"The Test Garden","authors":["Mira Green"],"publishedDate":"2020","publisher":"Test Press","industryIdentifiers":[{"type":"ISBN_13","identifier":"9780306406157"}]}}]}}}

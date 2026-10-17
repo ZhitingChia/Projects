@@ -1,0 +1,405 @@
+openapi: 3.0.3
+info:
+  title: Life Tracker Knowledge Library
+  version: 0.1.0
+  description: Private multi-user reading libraries. See API.md for identity, retries, ownership and no-cache rules. Mutations require X-CSRF-TOKEN from /auth/csrf.
+servers:
+  - url: /api/v1
+security:
+  - session: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        '200': {description: Application and database available}
+        '503': {description: Database unavailable}
+  /auth/csrf:
+    get:
+      security: []
+      responses:
+        '200':
+          description: Session CSRF token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: {type: string}
+                  headerName: {type: string}
+  /auth/register:
+    post:
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/Credentials'}
+      responses:
+        '202': {description: Generic acknowledgement; verification email sent when eligible}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/login:
+    post:
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/Credentials'}
+      responses:
+        '200': {description: Authenticated session and email}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/logout:
+    post:
+      responses:
+        '204': {description: Session destroyed}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/me:
+    get:
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email: {type: string, format: email}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/resend-verification:
+    post:
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/Email'}
+      responses:
+        '202': {description: Generic acknowledgement}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/forgot-password:
+    post:
+      security: []
+      requestBody: {$ref: '#/components/requestBodies/Email'}
+      responses:
+        '202': {description: Generic acknowledgement}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/verify-email:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: {type: string, maxLength: 100}
+      responses:
+        '204': {description: Email verified; token consumed}
+        default: {$ref: '#/components/responses/Error'}
+  /auth/reset-password:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: {type: string, maxLength: 100}
+                password: {type: string, description: 12–72 UTF-8 bytes}
+      responses:
+        '204': {description: Password replaced; all sessions invalidated}
+        default: {$ref: '#/components/responses/Error'}
+  /books/search:
+    get:
+      parameters:
+        - {in: query, name: title, schema: {type: string, maxLength: 300}}
+        - {in: query, name: author, schema: {type: string, maxLength: 300}}
+        - {in: query, name: isbn, schema: {type: string}}
+        - {in: query, name: page, schema: {type: integer, minimum: 0, maximum: 20, default: 0}}
+      responses:
+        '200':
+          description: Edition candidates and per-provider warnings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/Metadata'}}
+                  warnings: {type: array, items: {type: string}}
+        default: {$ref: '#/components/responses/Error'}
+  /books/providers/{provider}/{editionId}:
+    parameters:
+      - {$ref: '#/components/parameters/Provider'}
+      - {$ref: '#/components/parameters/Edition'}
+    get:
+      responses:
+        '200':
+          description: Selected edition metadata
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Metadata'}
+        default: {$ref: '#/components/responses/Error'}
+  /books/providers/{provider}/{editionId}/description:
+    parameters:
+      - {$ref: '#/components/parameters/Provider'}
+      - {$ref: '#/components/parameters/Edition'}
+    get:
+      responses:
+        '200': {$ref: '#/components/responses/Description'}
+        default: {$ref: '#/components/responses/Error'}
+  /library/books:
+    get:
+      parameters:
+        - {in: query, name: page, schema: {type: integer, minimum: 0, default: 0}}
+        - {in: query, name: size, schema: {type: integer, minimum: 1, maximum: 100, default: 100}}
+      responses:
+        '200':
+          description: Completed books ordered by newest date-added first and descending ID tiebreaker
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: '#/components/schemas/LibraryView'}}
+                  hasMore: {type: boolean}
+                  total: {type: integer, format: int64}
+        default: {$ref: '#/components/responses/Error'}
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, metadata, reading]
+              properties:
+                requestId: {type: string, format: uuid}
+                metadata: {$ref: '#/components/schemas/Metadata'}
+                reading: {$ref: '#/components/schemas/Reading'}
+                drawingId: {type: string, format: uuid, nullable: true}
+                uploadId: {type: string, format: uuid, nullable: true}
+                confirmPossibleDuplicate: {type: boolean, default: false}
+      responses:
+        '201': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+  /library/books/{id}:
+    parameters: [{$ref: '#/components/parameters/Entry'}]
+    get:
+      responses:
+        '200': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, metadata]
+              properties:
+                version: {type: integer, format: int64}
+                metadata: {$ref: '#/components/schemas/Metadata'}
+      responses:
+        '200': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      responses:
+        '204': {description: Owned entry and personal records removed}
+        default: {$ref: '#/components/responses/Error'}
+  /library/books/{id}/sessions:
+    parameters: [{$ref: '#/components/parameters/Entry'}]
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Reading'}
+      responses:
+        '201': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+  /library/books/{id}/sessions/{sessionId}:
+    parameters:
+      - {$ref: '#/components/parameters/Entry'}
+      - {in: path, name: sessionId, required: true, schema: {type: string, format: uuid}}
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version, completionDate]
+              properties:
+                version: {type: integer, format: int64}
+                startDate: {type: string, format: date, nullable: true}
+                completionDate: {type: string, format: date}
+                review: {type: string, maxLength: 20000, nullable: true}
+      responses:
+        '200': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      responses:
+        '204': {description: Session removed; final-session removal returns 409}
+        default: {$ref: '#/components/responses/Error'}
+  /library/books/{id}/artwork/{type}:
+    parameters:
+      - {$ref: '#/components/parameters/Entry'}
+      - {in: path, name: type, required: true, schema: {type: string, enum: [DRAWING, UPLOAD]}}
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [artworkId]
+              properties:
+                artworkId: {type: string, format: uuid}
+      responses:
+        '200': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+    delete:
+      responses:
+        '200': {$ref: '#/components/responses/LibraryView'}
+        default: {$ref: '#/components/responses/Error'}
+  /library/books/{id}/description:
+    parameters: [{$ref: '#/components/parameters/Entry'}]
+    get:
+      responses:
+        '200': {$ref: '#/components/responses/Description'}
+        default: {$ref: '#/components/responses/Error'}
+  /artwork:
+    post:
+      parameters:
+        - {in: query, name: type, required: true, schema: {type: string, enum: [DRAWING, UPLOAD]}}
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: {type: string, format: binary, description: JPEG/PNG at most 5 MiB and 16 megapixels}
+      responses:
+        '201':
+          description: Owned staged image
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Artwork'}
+        default: {$ref: '#/components/responses/Error'}
+  /artwork/{id}/content:
+    parameters: [{$ref: '#/components/parameters/Entry'}]
+    get:
+      responses:
+        '200':
+          description: Private image; Cache-Control no-store
+          content:
+            image/png:
+              schema: {type: string, format: binary}
+        default: {$ref: '#/components/responses/Error'}
+components:
+  securitySchemes:
+    session: {type: apiKey, in: cookie, name: SESSION}
+  parameters:
+    Entry: {in: path, name: id, required: true, schema: {type: string, format: uuid}}
+    Provider: {in: path, name: provider, required: true, schema: {type: string, enum: [googlebooks, openlibrary]}}
+    Edition: {in: path, name: editionId, required: true, schema: {type: string, maxLength: 100}}
+  requestBodies:
+    Credentials:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email, password]
+            properties:
+              email: {type: string, format: email, maxLength: 254}
+              password: {type: string, description: Registration requires 12–72 UTF-8 bytes}
+    Email:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: {type: string, format: email, maxLength: 254}
+  responses:
+    LibraryView:
+      description: Current owned library record
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/LibraryView'}
+    Description:
+      description: Transient plain text; must not be cached or persisted
+      headers:
+        Cache-Control: {schema: {type: string}, description: no-store}
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              text: {type: string, nullable: true}
+              source: {type: string}
+              workLevel: {type: boolean}
+    Error:
+      description: Structured error; 400, 401, 403, 404, 409, 413, 429 or 503 as applicable
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              status: {type: integer}
+              detail: {type: string}
+              correlationId: {type: string}
+              errors: {type: object, additionalProperties: {type: string}}
+  schemas:
+    Metadata:
+      type: object
+      required: [title, authors]
+      properties:
+        title: {type: string, minLength: 1, maxLength: 500}
+        subtitle: {type: string, nullable: true, maxLength: 500}
+        authors: {type: array, maxItems: 30, items: {type: string, maxLength: 300}}
+        isbn10: {type: string, nullable: true, maxLength: 40}
+        isbn13: {type: string, nullable: true, maxLength: 40}
+        publisher: {type: string, nullable: true, maxLength: 500}
+        publicationDate: {type: string, nullable: true, maxLength: 100}
+        language: {type: string, nullable: true, maxLength: 40}
+        pageCount: {type: integer, nullable: true, minimum: 1, maximum: 100000}
+        coverUrl: {type: string, nullable: true, maxLength: 2000}
+        provider: {type: string, nullable: true}
+        editionId: {type: string, nullable: true, maxLength: 100}
+        workId: {type: string, nullable: true, maxLength: 100}
+    Reading:
+      type: object
+      required: [requestId, localDate]
+      properties:
+        requestId: {type: string, format: uuid}
+        localDate: {type: string, format: date}
+        startDate: {type: string, format: date, nullable: true}
+        completionDate: {type: string, format: date, nullable: true}
+        review: {type: string, maxLength: 20000, nullable: true}
+    Session:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+        startDate: {type: string, format: date, nullable: true}
+        completionDate: {type: string, format: date}
+        review: {type: string, nullable: true}
+    Artwork:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        type: {type: string, enum: [DRAWING, UPLOAD]}
+        url: {type: string}
+    LibraryView:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        version: {type: integer, format: int64}
+        metadata: {$ref: '#/components/schemas/Metadata'}
+        readingStatus: {type: string, enum: [COMPLETED, CURRENTLY_READING, WANT_TO_READ]}
+        dateAdded: {type: string, format: date-time}
+        spineColor: {type: string}
+        spineWidth: {type: integer}
+        spineHeight: {type: integer}
+        coverUrl: {type: string, nullable: true}
+        artwork: {type: array, items: {$ref: '#/components/schemas/Artwork'}}
+        sessions: {type: array, items: {$ref: '#/components/schemas/Session'}}

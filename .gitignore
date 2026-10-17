@@ -1,0 +1,14 @@
+.idea/
+.tools/
+**/node_modules/
+**/dist/
+**/target/
+**/coverage/
+**/test-results/
+**/playwright-report/
+.env
+data/
+*.log
+*.tsbuildinfo
+*.dump
+*.tar.gz

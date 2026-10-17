@@ -1,0 +1,12 @@
+.git
+.tools
+.idea
+**/node_modules
+**/target
+**/dist
+data
+.env
+**/test-results
+**/playwright-report
+**/coverage
+**/*.tsbuildinfo
